@@ -32,19 +32,16 @@ using namespace std;
     C_STEREO_PASSIVE_LEFT_RIGHT:  Passive stereo where L/R images are rendered next to each other
     C_STEREO_PASSIVE_TOP_BOTTOM:  Passive stereo where L/R images are rendered above each other
 */
-cStereoMode stereoMode = C_STEREO_DISABLED;
 
 // fullscreen mode
 bool fullscreen = false;
-
-// mirrored display
-bool mirroredDisplay = false;
-
 
 //------------------------------------------------------------------------------
 // DECLARED VARIABLES
 //------------------------------------------------------------------------------
 
+// Material for the objects
+cMaterial m;
 // a world that contains all objects of the virtual environment
 cWorld* world;
 
@@ -57,8 +54,9 @@ cDirectionalLight *light;
 // a virtual object
 cMultiMesh *objects[2];
 
-// The textureplane
-cMesh* texturePlane;
+
+// Create box
+cShapeBox *ourBox;
 
 // a haptic device handler
 cHapticDeviceHandler* handler;
@@ -204,6 +202,10 @@ int main(int argc, char* argv[])
     //--------------------------------------------------------------------------
 
     // initialize GLFW library
+
+    //****************************************
+    //This is the ACADEMIC EDITION of OPENHAPTICS, commercial distribution is prohibited
+    //Please contact SensAble Technologies to o
     if (!glfwInit())
     {
         cout << "failed initialization" << endl;
@@ -226,18 +228,14 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 
     // set active stereo mode
-    if (stereoMode == C_STEREO_ACTIVE)
-    {
-        glfwWindowHint(GLFW_STEREO, GL_TRUE);
-    }
-    else
-    {
+
         glfwWindowHint(GLFW_STEREO, GL_FALSE);
-    }
+
 
     // create display context
     window = glfwCreateWindow(w, h, "CHAI3D", NULL, NULL);
     if (!window)
+
     {
         cout << "failed to create window" << endl;
         cSleepMs(1000);
@@ -300,7 +298,7 @@ int main(int argc, char* argv[])
                             20);    // spherical coordinate azimuth angle
     */
     // position and orient the camera
-    camera->set( cVector3d (0.4, 0.0, 0.2),    // camera position (eye)
+    camera->set( cVector3d (0.35, 0, 0),    // camera position (eye)
                  cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
                  cVector3d (0.0, 0.0, 1.0));   // direction of the (up) vector
 
@@ -309,15 +307,12 @@ int main(int argc, char* argv[])
     camera->setClippingPlanes(0.01, 100);
 
     // set stereo mode
-    camera->setStereoMode(stereoMode);
-
-    // set stereo eye separation and focal length (applies only if stereo is enabled)
-    camera->setStereoEyeSeparation(0.03);
-    camera->setStereoFocalLength(1.5);
+    camera->setStereoMode(C_STEREO_DISABLED);
 
     // set vertical mirrored display mode
-    camera->setMirrorVertical(mirroredDisplay);
+    camera->setMirrorVertical(false);
 
+    // mirrored display
     // enable multi-pass rendering to handle transparent objects
     camera->setUseMultipassTransparency(true);
 
@@ -326,6 +321,7 @@ int main(int argc, char* argv[])
 
     // attach light to camera
     camera->addChild(light);
+    // read the scale factor between the physical workspace of the haptic
 
     // enable light source
     light->setEnabled(true);
@@ -343,6 +339,7 @@ int main(int argc, char* argv[])
     // HAPTIC DEVICES / TOOLS
     //--------------------------------------------------------------------------
 
+    // read the scale factor between the physical workspace of the haptic
     // create a haptic device handler
     handler = new cHapticDeviceHandler();
 
@@ -367,19 +364,6 @@ int main(int argc, char* argv[])
 
     // define a radius for the tool
     tool->setRadius(toolRadius);
-
-    //CREATE A MESH
-    texturePlane = new cMesh();
-
-    //CREATE PLANE
-    cCreatePlane(texturePlane, 0.3, 0.3);
-
-    //CREATE COLLISION DETECTOR
-    texturePlane->createAABBCollisionDetector(toolRadius);
-
-    // ADD TEXTURE TO WORLD
-    world->addChild(texturePlane);
-
 
 
     // hide the device sphere. only show proxy.
@@ -414,12 +398,21 @@ int main(int argc, char* argv[])
     // stiffness properties
     double maxStiffness	= hapticDeviceInfo.m_maxLinearStiffness / workspaceScaleFactor;
 
+    // Put our box into the world
+    cMaterial ourBoxMaterial;
+
+    ourBoxMaterial.setRed();
+    ourBoxMaterial.setTransparencyLevel(0.5);
+    ourBox = new cShapeBox(0.15, 0.15, 0.15);
+    world->addChild(ourBox);
+    ourBox->setMaterial(ourBoxMaterial);
+    ourBox->setLocalPos(0,0,0);
+
     // create a virtual mesh
     objects[0] = new cMultiMesh();
     objects[1]  = new cMultiMesh();
 
-    cMaterial m;
-    m.setBlueCadet();
+    m.setBlack();
 
     // set line width of edges and color
     cColorf colorEdges;
@@ -499,42 +492,6 @@ int main(int argc, char* argv[])
 
     objects[1]->setShowEdges(false);
 
-    //TEXTUREPLANE STUFF
-    bool fileload;
-    texturePlane->m_texture = cTexture2d::create();
-    fileload = texturePlane->m_texture->loadFromFile(RESOURCE_PATH("../yourImage.jpg"));
-    if (!fileload)
-    {
-        #if defined(_MSVC)
-        fileload = texturePlane->m_texture->loadFromFile("../yourImage.jpg");
-        #endif
-    }
-    if (!fileload)
-    {
-        cout << "Error - Texture image failed to load correctly." << endl;
-        close();
-        return (-1);
-    }
-
-    // enable texture mapping
-     texturePlane->setUseTexture(true);
-     texturePlane->m_material->setWhite();
-
-     // create normal map from texture data
-     cNormalMapPtr normalMap0 = cNormalMap::create();
-     normalMap0->createMap(texturePlane->m_texture);
-     texturePlane->m_normalMap = normalMap0;
-texturePlane->m_texture = normalMap0;
-     // set haptic properties
-     texturePlane->m_material->setStiffness(0.8 * maxStiffness);
-     texturePlane->m_material->setStaticFriction(0.3);
-     texturePlane->m_material->setDynamicFriction(0.2);
-     texturePlane->m_material->setTextureLevel(1.0);
-     texturePlane->m_material->setHapticTriangleSides(true, false);
-
-
-
-
 /*
     // get dimensions of object
     object->computeBoundaryBox(true);
@@ -563,10 +520,10 @@ texturePlane->m_texture = normalMap0;
     camera->m_backLayer->addChild(background);
 
     // set background properties
-    background->setCornerColors(cColorf(0.95f, 0.95f, 0.95f),
-                                cColorf(0.95f, 0.95f, 0.95f),
-                                cColorf(0.80f, 0.80f, 0.80f),
-                                cColorf(0.80f, 0.80f, 0.80f));
+    background->setCornerColors(cColorf(0, 0, 0),
+                                cColorf(0, 0, 0),
+                                cColorf(0, 0, 0),
+                                cColorf(0, 0, 0));
 
 
     //--------------------------------------------------------------------------
@@ -637,24 +594,48 @@ void errorCallback(int a_error, const char* a_description)
 
 void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, int a_mods)
 {
-//    // filter calls that only include a key press
-//    if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
-//    {
-//        return;
-//    }
+    // filter calls that only include a key press
+    if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
+    {
+        return;
+    }
 
-//    // option - exit
-//    else if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
-//    {
-//        glfwSetWindowShouldClose(a_window, GLFW_TRUE);
-//    }
+    // option - exit
+    else if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
+    {
+        glfwSetWindowShouldClose(a_window, GLFW_TRUE);
+    }
 
-//    // option - show/hide texture
-//    else if (a_key == GLFW_KEY_1)
-//    {
-//        bool useTexture = object->getUseTexture();
-//        object->setUseTexture(!useTexture);
-//    }
+    // option - show/hide texture
+    else if (a_key == GLFW_KEY_T)
+    {
+        cout << "Light toggled off or on" << endl;
+        cout << endl << endl;
+
+        bool nextLightStatus = light->getEnabled();
+        light->setEnabled(!nextLightStatus);
+
+        if(!nextLightStatus){
+            background->setCornerColors(cColorf(0.95f, 0.95f, 0.95f),
+                                        cColorf(0.95f, 0.95f, 0.95f),
+                                        cColorf(0.80f, 0.80f, 0.80f),
+                                        cColorf(0.80f, 0.80f, 0.80f));
+            cMaterial m;
+            m.setBlueCadet();
+            objects[1]->setMaterial(m);
+        } else {
+            background->setCornerColors(cColorf(0, 0, 0),
+                                        cColorf(0, 0, 0),
+                                        cColorf(0, 0, 0),
+                                        cColorf(0, 0, 0));
+            cMaterial m;
+            m.setBlack();
+            objects[1]->setMaterial(m);
+        }
+
+
+
+    }
 
 //    // option - enable/disable wire mode
 //    else if (a_key == GLFW_KEY_2)
@@ -798,7 +779,7 @@ void updateGraphics(void)
     /////////////////////////////////////////////////////////////////////
 
     // update shadow maps (if any)
-    world->updateShadowMaps(false, mirroredDisplay);
+    world->updateShadowMaps(false, false);
 
     // render world
     camera->renderView(width, height);
@@ -946,7 +927,26 @@ void updateHaptics(void)
 /*
  *
  *  Example code borrowed from Chai3D library:
-
+    cout << endl;
+    cout << "-----------------------------------" << endl;
+    cout << "CHAI3D" << endl;
+    cout << "Demo: 21-object" << endl;
+    cout << "Copyright 2003-2016" << endl;
+    cout << "-----------------------------------" << endl << endl << endl;
+    cout << "Keyboard Options:" << endl << endl;
+    cout << "[1] - Texture   (ON/OFF)" << endl;
+    cout << "[2] - Wireframe (ON/OFF)" << endl;
+    cout << "[3] - Collision tree (ON/OFF)" << endl;
+    cout << "[4] - Increase collision tree display depth" << endl;
+    cout << "[5] - Decrease collision tree display depth" << endl;
+    cout << "[s] - Save screenshot to file" << endl;
+    cout << "[e] - Enable/Disable display of edges" << endl;
+    cout << "[t] - Enable/Disable display of triangles" << endl;
+    cout << "[n] - Enable/Disable display of normals" << endl;
+    cout << "[f] - Enable/Disable full screen mode" << endl;
+    cout << "[m] - Enable/Disable vertical mirroring" << endl;
+    cout << "[q] - Exit application" << endl;
+    cout << endl << endl;
     Software License Agreement (BSD License)
     Copyright (c) 2003-2016, CHAI3D.
     (www.chai3d.org)
