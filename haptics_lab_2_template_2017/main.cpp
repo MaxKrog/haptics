@@ -1,9 +1,25 @@
+/*
+ *
+ *
+ *    DH2660 Haptic Programming spring 2017
+ *    Lab 2 Template directly based on Chai3D Example 21.
+ *
+ *    Distribution license: BSD (e.g. free to use for
+ *    most purposes, see end of file)
+ *
+ */
+
+//------------------------------------------------------------------------------
 #include <string>
 #include <iostream>
+
 #include "chai3d.h"
+//------------------------------------------------------------------------------
 #include <GLFW/glfw3.h>
+//------------------------------------------------------------------------------
 using namespace chai3d;
 using namespace std;
+//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 // GENERAL SETTINGS
@@ -16,43 +32,36 @@ using namespace std;
     C_STEREO_PASSIVE_LEFT_RIGHT:  Passive stereo where L/R images are rendered next to each other
     C_STEREO_PASSIVE_TOP_BOTTOM:  Passive stereo where L/R images are rendered above each other
 */
+cStereoMode stereoMode = C_STEREO_DISABLED;
 
 // fullscreen mode
 bool fullscreen = false;
 
-//------------------------------------------------------------------------------
-// PROJECT SPECIFIC DECLARATIONS
-//------------------------------------------------------------------------------
+// mirrored display
+bool mirroredDisplay = false;
 
-// Material for the objects
-cMaterial m;
-
-// a virtual object
-cMultiMesh *object;
-
-// Create box
-cShapeBox *ourBox;
 
 //------------------------------------------------------------------------------
-// SYSTEM DECLARATIONS (STANDARD)
+// DECLARED VARIABLES
 //------------------------------------------------------------------------------
 
-
-// a world that contains all objects of the virtual environment
-
+// a world that contains all object of the virtual environment
 cWorld* world;
+
 // a camera to render the world in the window display
 cCamera* camera;
 
-// a light source to illuminate the objects in the world
+// a light source to illuminate the object in the world
 cDirectionalLight *light;
+
+// a virtual object
+cMultiMesh *object;
 
 // a haptic device handler
 cHapticDeviceHandler* handler;
 
 // a pointer to the current haptic device
 cGenericHapticDevicePtr hapticDevice;
-//------------------------------------------------------------------------------
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
@@ -139,6 +148,22 @@ void updateHaptics(void);
 void close(void);
 
 
+//==============================================================================
+/*
+    DEMO:   21-object.cpp
+
+    This demonstration loads a 3D mesh file by using the file loader
+    functionality of the \ref cMultiMesh class. A finger-proxy algorithm is
+    used to render the forces. Take a look at this example to understand the
+    different functionalities offered by the tool force renderer.
+
+    In the main haptics loop function  "updateHaptics()" , the position
+    of the haptic device is retrieved at each simulation iteration.
+    The interaction forces are then computed and sent to the device.
+    Finally, a simple dynamics model is used to simulate the behavior
+    of the object.
+*/
+//==============================================================================
 
 int main(int argc, char* argv[])
 {
@@ -148,21 +173,34 @@ int main(int argc, char* argv[])
 
     cout << endl;
     cout << "-----------------------------------" << endl;
-    cout << "Welcome to Haptiquiz!" << endl;
+    cout << "CHAI3D" << endl;
+    cout << "Demo: 21-object" << endl;
+    cout << "Copyright 2003-2016" << endl;
     cout << "-----------------------------------" << endl << endl << endl;
+    cout << "Keyboard Options:" << endl << endl;
+    cout << "[1] - Texture   (ON/OFF)" << endl;
+    cout << "[2] - Wireframe (ON/OFF)" << endl;
+    cout << "[3] - Collision tree (ON/OFF)" << endl;
+    cout << "[4] - Increase collision tree display depth" << endl;
+    cout << "[5] - Decrease collision tree display depth" << endl;
+    cout << "[s] - Save screenshot to file" << endl;
+    cout << "[e] - Enable/Disable display of edges" << endl;
+    cout << "[t] - Enable/Disable display of triangles" << endl;
+    cout << "[n] - Enable/Disable display of normals" << endl;
+    cout << "[f] - Enable/Disable full screen mode" << endl;
+    cout << "[m] - Enable/Disable vertical mirroring" << endl;
+    cout << "[q] - Exit application" << endl;
+    cout << endl << endl;
 
     // parse first arg to try and locate resources
     resourceRoot = string(argv[0]).substr(0,string(argv[0]).find_last_of("/\\")+1);
+
 
     //--------------------------------------------------------------------------
     // OPEN GL - WINDOW DISPLAY
     //--------------------------------------------------------------------------
 
     // initialize GLFW library
-
-    //****************************************
-    //This is the ACADEMIC EDITION of OPENHAPTICS, commercial distribution is prohibited
-    //Please contact SensAble Technologies to o
     if (!glfwInit())
     {
         cout << "failed initialization" << endl;
@@ -185,14 +223,18 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 
     // set active stereo mode
-
-    glfwWindowHint(GLFW_STEREO, GL_FALSE);
-
+    if (stereoMode == C_STEREO_ACTIVE)
+    {
+        glfwWindowHint(GLFW_STEREO, GL_TRUE);
+    }
+    else
+    {
+        glfwWindowHint(GLFW_STEREO, GL_FALSE);
+    }
 
     // create display context
     window = glfwCreateWindow(w, h, "CHAI3D", NULL, NULL);
     if (!window)
-
     {
         cout << "failed to create window" << endl;
         cSleepMs(1000);
@@ -200,11 +242,22 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // get width and height of window
     glfwGetWindowSize(window, &width, &height);
+
+    // set position of window
     glfwSetWindowPos(window, x, y);
+
+    // set key callback
     glfwSetKeyCallback(window, keyCallback);
+
+    // set resize callback
     glfwSetWindowSizeCallback(window, windowSizeCallback);
+
+    // set current display context
     glfwMakeContextCurrent(window);
+
+    // sets the swap interval for the current display context
     glfwSwapInterval(swapInterval);
 
 #ifdef GLEW_VERSION
@@ -225,8 +278,10 @@ int main(int argc, char* argv[])
     // create a new world.
     world = new cWorld();
 
+    // set the background color of the environment
     world->m_backgroundColor.setBlack();
 
+    // create a camera and insert it into the virtual world
     camera = new cCamera(world);
     world->addChild(camera);
 
@@ -242,7 +297,7 @@ int main(int argc, char* argv[])
                             20);    // spherical coordinate azimuth angle
     */
     // position and orient the camera
-    camera->set( cVector3d (0.35, 0, 0),    // camera position (eye)
+    camera->set( cVector3d (0.4, 0.0, 0.2),    // camera position (eye)
                  cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
                  cVector3d (0.0, 0.0, 1.0));   // direction of the (up) vector
 
@@ -251,44 +306,83 @@ int main(int argc, char* argv[])
     camera->setClippingPlanes(0.01, 100);
 
     // set stereo mode
-    camera->setStereoMode(C_STEREO_DISABLED);
-    camera->setMirrorVertical(false);
+    camera->setStereoMode(stereoMode);
+
+    // set stereo eye separation and focal length (applies only if stereo is enabled)
+    camera->setStereoEyeSeparation(0.03);
+    camera->setStereoFocalLength(1.5);
+
+    // set vertical mirrored display mode
+    camera->setMirrorVertical(mirroredDisplay);
+
+    // enable multi-pass rendering to handle transparent object
     camera->setUseMultipassTransparency(true);
 
-    //------------------------------------------------------------------------------
-    // LIGHT ETC
-    //------------------------------------------------------------------------------
-
+    // create a light source
     light = new cDirectionalLight(world);
 
+    // attach light to camera
     camera->addChild(light);
+
+    // enable light source
     light->setEnabled(true);
+
+    // define the direction of the light beam
+    light->setDir(-3.0,-0.5, 0.0);
+
+    // set lighting conditions
     light->m_ambient.set(0.4f, 0.4f, 0.4f);
     light->m_diffuse.set(0.8f, 0.8f, 0.8f);
     light->m_specular.set(1.0f, 1.0f, 1.0f);
-
-    light->setDir(-3.0,-0.5, 0.0); //Direction of light
 
 
     //--------------------------------------------------------------------------
     // HAPTIC DEVICES / TOOLS
     //--------------------------------------------------------------------------
 
+    // create a haptic device handler
     handler = new cHapticDeviceHandler();
+
+    // get access to the first available haptic device found
     handler->getDevice(hapticDevice, 0);
+
+    // retrieve information about the current haptic device
     cHapticDeviceInfo hapticDeviceInfo = hapticDevice->getSpecifications();
+
+    // create a tool (cursor) and insert into the world
     tool = new cToolCursor(world);
     world->addChild(tool);
-    tool->setHapticDevice(hapticDevice);     // connect the haptic device to the virtual tool
-    hapticDevice->setEnableGripperUserSwitch(true);     // if the haptic device has a gripper, enable it as a user switch
-    double toolRadius = 0.006; //Tool radius
-    tool->setRadius(toolRadius);
-    tool->setShowContactPoints(true, false);
-    tool->m_hapticPoint->m_sphereProxy->m_material->setWhite();
-    tool->setWorkspaceRadius(0.1);
-    tool->setLocalRot(camera->getLocalRot()); //Maybe interesting
 
+    // connect the haptic device to the virtual tool
+    tool->setHapticDevice(hapticDevice);
+
+    // if the haptic device has a gripper, enable it as a user switch
+    hapticDevice->setEnableGripperUserSwitch(true);
+
+    // define the radius of the tool (sphere)
+    double toolRadius = 0.006;
+
+    // define a radius for the tool
+    tool->setRadius(toolRadius);
+
+    // hide the device sphere. only show proxy.
+    tool->setShowContactPoints(true, false);
+
+    // create a white cursor
+    tool->m_hapticPoint->m_sphereProxy->m_material->setWhite();
+
+    // map the physical workspace of the haptic device to a larger virtual workspace.
+    tool->setWorkspaceRadius(0.1);
+
+    // oriente tool with camera
+    tool->setLocalRot(camera->getLocalRot());
+
+    // haptic forces are enabled only if small forces are first sent to the device;
+    // this mode avoids the force spike that occurs when the application starts when
+    // the tool is located inside an object for instance.
     tool->setWaitForSmallForce(true);
+
+    // start the haptic tool
     tool->start();
 
 
@@ -303,24 +397,12 @@ int main(int argc, char* argv[])
     // stiffness properties
     double maxStiffness	= hapticDeviceInfo.m_maxLinearStiffness / workspaceScaleFactor;
 
-    //--------------------------------------------------------------------------
-    // CREATE BOX
-    //--------------------------------------------------------------------------
-    // Put our box into the world
-//    cMaterial ourBoxMaterial;
-//    ourBoxMaterial.setRed();
-//    ourBoxMaterial.setTransparencyLevel(0.5);
-//    ourBox = new cShapeBox(0.15, 0.15, 0.15);
-//    world->addChild(ourBox);
-//    ourBox->setMaterial(ourBoxMaterial);
-//    ourBox->setLocalPos(0,0,0);
-
-
-
     // create a virtual mesh
     object = new cMultiMesh();
+    object  = new cMultiMesh();
 
-    m.setBlack();
+    cMaterial m;
+    m.setBlueCadet();
 
     // set line width of edges and color
     cColorf colorEdges;
@@ -329,65 +411,83 @@ int main(int argc, char* argv[])
     cColorf colorNormals;
     colorNormals.setOrangeTomato();
 
-    // add object to world
-    world->addChild(object);
 
-    // load an object file
-    object->loadFromFile("./models/Laptop.obj");
 
-    object->setMaterial(m);
-    // disable culling so that faces are rendered on both sides
-    object->setUseCulling(false);
-    // compute a boundary box
-    object->computeBoundaryBox(true);
-    // show/hide boundary box
-    object->setShowBoundaryBox(false);
-    // compute collision detection algorithm
-    object->createAABBCollisionDetector(toolRadius);
-    // enable display list for faster graphic rendering
-    object->setUseDisplayList(true);
+    for (int i = 0; i < 2; i++) {
+        // add object to world
+        world->addChild(object);
 
-    // rotate object in scene
-    //object->rotateExtrinsicEulerAnglesDeg(0, 0, 90, C_EULER_ORDER_XYZ);
-    // compute all edges of object for which adjacent triangles have more than 40 degree angle
-    object->computeAllEdges(0);
-    object->setEdgeProperties(1, colorEdges);
+        // load an object file
+        bool fileload;
+        fileload = object->loadFromFile("Rock1.obj");
+        if (!fileload)
+        {
+            #if defined(_MSVC)
+            fileload = object->loadFromFile("Rock1.obj");
+            #endif
+        }
+        if (!fileload)
+        {
+            cout << "Error - 3D Model failed to load correctly" << endl;
+            close();
+            return (-1);
+        }
 
-    // set normal properties for display
-    object->setNormalsProperties(0.01, colorNormals);
+        object->setMaterial(m);
+        // disable culling so that faces are rendered on both sides
+        object->setUseCulling(false);
+        // compute a boundary box
+        object->computeBoundaryBox(true);
+        // show/hide boundary box
+        object->setShowBoundaryBox(false);
+        // compute collision detection algorithm
+        object->createAABBCollisionDetector(toolRadius);
+        // enable display list for faster graphic rendering
+        object->setUseDisplayList(true);
 
-    // display options
-    object->setShowTriangles(showTriangles);
-    object->setShowEdges(showEdges);
-    object->setShowNormals(showNormals);
+        // rotate object in scene
+        //object->rotateExtrinsicEulerAnglesDeg(0, 0, 90, C_EULER_ORDER_XYZ);
+        // compute all edges of object for which adjacent triangles have more than 40 degree angle
+        object->computeAllEdges(0);
 
+        object->setEdgeProperties(1, colorEdges);
+
+        // set normal properties for display
+
+        object->setNormalsProperties(0.01, colorNormals);
+
+        // display options
+        object->setShowTriangles(showTriangles);
+        object->setShowEdges(showEdges);
+        object->setShowNormals(showNormals);
+
+
+    }
 
 
     //DO THE SPECIFIC STUFF HERE
     object->setWireMode(true);
-
-    // Put object at a specific position in the scene
+    // center object in scene
     object->setLocalPos(-1.0 * object->getBoundaryCenter().x(), -100.0 * object->getBoundaryCenter().y(), -1.0 * object->getBoundaryCenter().z() );
 
-    // define stiffness f(Spongeiness)
+    // define a default stiffness for the object (Spongeiness)
     object->setStiffness(1.0 * maxStiffness, true);
 
-    // FRICTION PROPERTIES
-    // Value 1: when pushing along
-    // Value 2: how hard it is to start moving along.
-    object->setFriction(0.05, 0.05, true);
+    // define some haptic friction properties (SANDPAPER) STATIC = when pushing along, DYNAMIC = how hard it is to start moving along.
+    object->setFriction(1, 0, true);
 
+    object->setShowEdges(false);
+/*
+    // get dimensions of object
+    object->computeBoundaryBox(true);
+    double size = cSub(object->getBoundaryMax(), object->getBoundaryMin()).length();
 
-//    // get dimensions of object
-//    objects[1]->computeBoundaryBox(true);
-//    double size = cSub(objects[1]->getBoundaryMax(), objects[1]->getBoundaryMin()).length();
-
-//    // resize object to screen
-//    if (size > 0.001)
-//    {
-//        objects[1]->scale(1.0 / size);
-//    }
-
+    // resize object to screen
+    if (size > 0.001)
+    {
+        object->scale(1.0 / size);
+    }
+*/
     //--------------------------------------------------------------------------
     // WIDGETS
     //--------------------------------------------------------------------------
@@ -479,48 +579,24 @@ void errorCallback(int a_error, const char* a_description)
 
 void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, int a_mods)
 {
-    // filter calls that only include a key press
-    if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
-    {
-        return;
-    }
+//    // filter calls that only include a key press
+//    if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
+//    {
+//        return;
+//    }
 
-    // option - exit
-    else if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
-    {
-        glfwSetWindowShouldClose(a_window, GLFW_TRUE);
-    }
+//    // option - exit
+//    else if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
+//    {
+//        glfwSetWindowShouldClose(a_window, GLFW_TRUE);
+//    }
 
-    // option - show/hide texture
-    else if (a_key == GLFW_KEY_T)
-    {
-        cout << "Light toggled off or on" << endl;
-        cout << endl << endl;
-
-        bool nextLightStatus = light->getEnabled();
-        light->setEnabled(!nextLightStatus);
-
-        if(!nextLightStatus){
-            background->setCornerColors(cColorf(0.95f, 0.95f, 0.95f),
-                                        cColorf(0.95f, 0.95f, 0.95f),
-                                        cColorf(0.80f, 0.80f, 0.80f),
-                                        cColorf(0.80f, 0.80f, 0.80f));
-            cMaterial m;
-            m.setBlueCadet();
-            object->setMaterial(m);
-        } else {
-            background->setCornerColors(cColorf(0, 0, 0),
-                                        cColorf(0, 0, 0),
-                                        cColorf(0, 0, 0),
-                                        cColorf(0, 0, 0));
-            cMaterial m;
-            m.setBlack();
-            object->setMaterial(m);
-        }
-
-
-
-    }
+//    // option - show/hide texture
+//    else if (a_key == GLFW_KEY_1)
+//    {
+//        bool useTexture = object->getUseTexture();
+//        object->setUseTexture(!useTexture);
+//    }
 
 //    // option - enable/disable wire mode
 //    else if (a_key == GLFW_KEY_2)
@@ -664,7 +740,7 @@ void updateGraphics(void)
     /////////////////////////////////////////////////////////////////////
 
     // update shadow maps (if any)
-    world->updateShadowMaps(false, false);
+    world->updateShadowMaps(false, mirroredDisplay);
 
     // render world
     camera->renderView(width, height);
@@ -773,7 +849,11 @@ void updateHaptics(void)
             // assign new local transformation to object
             selectedObject->setLocalTransform(parent_T_object);
 
-            tool->setDeviceGlobalForce(0.0, 0.0, -2.0);
+            if( selectedObject == (cGenericObject*)object){
+               tool->setDeviceGlobalForce(0.0, 0.0, 0.0);
+            } else {
+                tool->setDeviceGlobalForce(0.0, 0.0, -2.0);
+            }
 
             tool->initialize();
         }
@@ -808,26 +888,7 @@ void updateHaptics(void)
 /*
  *
  *  Example code borrowed from Chai3D library:
-    cout << endl;
-    cout << "-----------------------------------" << endl;
-    cout << "CHAI3D" << endl;
-    cout << "Demo: 21-object" << endl;
-    cout << "Copyright 2003-2016" << endl;
-    cout << "-----------------------------------" << endl << endl << endl;
-    cout << "Keyboard Options:" << endl << endl;
-    cout << "[1] - Texture   (ON/OFF)" << endl;
-    cout << "[2] - Wireframe (ON/OFF)" << endl;
-    cout << "[3] - Collision tree (ON/OFF)" << endl;
-    cout << "[4] - Increase collision tree display depth" << endl;
-    cout << "[5] - Decrease collision tree display depth" << endl;
-    cout << "[s] - Save screenshot to file" << endl;
-    cout << "[e] - Enable/Disable display of edges" << endl;
-    cout << "[t] - Enable/Disable display of triangles" << endl;
-    cout << "[n] - Enable/Disable display of normals" << endl;
-    cout << "[f] - Enable/Disable full screen mode" << endl;
-    cout << "[m] - Enable/Disable vertical mirroring" << endl;
-    cout << "[q] - Exit application" << endl;
-    cout << endl << endl;
+
     Software License Agreement (BSD License)
     Copyright (c) 2003-2016, CHAI3D.
     (www.chai3d.org)
